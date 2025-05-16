@@ -15,6 +15,6 @@ API REST para consultar información de códigos postales mexicanos.
 
 ## Instalación
 ```bash
-git clone https://github.com/tu-usuario/codigos-postales-api.git
+git clone git@github.com:Antonio-SZ1/codigos-postales-api.git
 cd codigos-postales-api
 docker-compose up --build
