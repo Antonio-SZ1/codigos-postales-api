@@ -15,7 +15,7 @@ def cargar_datos():
     db = Session()
 
     try:
-        # Limpiar tablas existentes (solo para desarrollo!)
+       
         Base.metadata.drop_all(engine)
         Base.metadata.create_all(engine)
 
@@ -26,7 +26,7 @@ def cargar_datos():
             csv_reader = csv.DictReader(f, delimiter='|')
             
             for row in csv_reader:
-                # Procesar Estados
+               
                 estado_id = row['c_estado'].strip()
                 estado_nombre = row['d_estado'].strip().title()
                 if (estado_id, estado_nombre) not in estados_registrados:
@@ -37,7 +37,7 @@ def cargar_datos():
                     db.execute(stmt)
                     estados_registrados.add((estado_id, estado_nombre))
                 
-                # Procesar Municipios
+               
                 municipio_id = row['c_mnpio'].strip()
                 municipio_nombre = row['D_mnpio'].strip().title()
                 if (municipio_id, estado_id, municipio_nombre) not in municipios_registrados:
@@ -49,7 +49,7 @@ def cargar_datos():
                     db.execute(stmt)
                     municipios_registrados.add((municipio_id, estado_id, municipio_nombre))
                 
-                # Procesar Asentamientos
+               
                 asentamiento_id = row['id_asenta_cpcons'].zfill(4)
                 stmt = pg_insert(Asentamiento).values(
                     id_asenta_cpcons=asentamiento_id,
