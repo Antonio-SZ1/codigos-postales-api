@@ -4,7 +4,11 @@ import sys
 from sqlalchemy import create_engine, exc
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+
+# Solo cargar dotenv si no estamos en producción (Render)
+if os.getenv("RENDER") != "true":
+    from dotenv import load_dotenv
+    load_dotenv()
 
 # Configurar path para imports relativos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -12,7 +16,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.models import Base, Estado, Municipio, Asentamiento
 
 # Leer variables de entorno
-load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 DEBUG_RESET_DB = os.getenv("DEBUG_RESET_DB", "false").lower() == "true"
 
@@ -104,7 +107,7 @@ def cargar_datos():
                     db.rollback()
                     continue
 
-        # Insertar asentamientos en lote (eficiente)
+        # Insertar asentamientos en lote
         try:
             db.bulk_save_objects(asentamientos_buffer, return_defaults=False)
             db.commit()
