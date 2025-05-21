@@ -1,7 +1,7 @@
 import os
 import csv
 import sys
-from sqlalchemy import create_engine, exc
+from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
@@ -10,7 +10,7 @@ if os.getenv("RENDER") != "true":
     from dotenv import load_dotenv
     load_dotenv()
 
-# Configurar path para imports relativos
+# Para imports relativos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models import Base, Estado, Municipio, Asentamiento
@@ -25,6 +25,11 @@ def crear_tablas(engine):
         Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     print("🧱 Tablas listas.")
+
+def chunked(iterable, size):
+    """Yield successive chunks from iterable of length size."""
+    for i in range(0, len(iterable), size):
+        yield iterable[i : i + size]
 
 def cargar_datos():
     if not DATABASE_URL:
@@ -83,21 +88,18 @@ def cargar_datos():
                         db.execute(stmt)
                         municipios_cache.add(municipio_key)
 
-                    # Crear objeto Asentamiento (para bulk insert)
-                    asentamientos_buffer.append(
-                        Asentamiento(
-                            id_asenta_cpcons=row['id_asenta_cpcons'].strip().zfill(4),
-                            d_codigo=cp,
-                            d_asenta=row['d_asenta'].strip().title(),
-                            d_tipo_asenta=row['d_tipo_asenta'].strip(),
-                            d_zona=zona,
-                            c_mnpio=municipio_id,
-                            c_estado=estado_id
-                        )
-                    )
+                    # Preparar diccionario para upsert de Asentamiento
+                    asentamientos_buffer.append({
+                        "id_asenta_cpcons": row['id_asenta_cpcons'].strip().zfill(4),
+                        "d_codigo": cp,
+                        "d_asenta": row['d_asenta'].strip().title(),
+                        "d_tipo_asenta": row['d_tipo_asenta'].strip(),
+                        "d_zona": zona,
+                        "c_mnpio": municipio_id,
+                        "c_estado": estado_id
+                    })
 
                     registros_procesados += 1
-
                     if idx % 1000 == 0:
                         print(f"⏳ Procesando {idx}/{total}...")
 
@@ -107,19 +109,18 @@ def cargar_datos():
                     db.rollback()
                     continue
 
-        # Insertar asentamientos en lote
-        try:
-            db.bulk_save_objects(asentamientos_buffer, return_defaults=False)
-            db.commit()
-        except Exception as e:
-            print(f"⚠️ Error en inserción bulk: {e}")
-            db.rollback()
+        # Upsert en lotes para evitar duplicados
+        for batch in chunked(asentamientos_buffer, 1000):
+            stmt = insert(Asentamiento).values(batch)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['id_asenta_cpcons'])
+            db.execute(stmt)
+        db.commit()
 
         print(f"""
         ✅ Carga completada.
         ----------------------------
         Total registros leídos  : {total}
-        Registros insertados    : {registros_procesados}
+        Registros procesados    : {registros_procesados}
         Estados insertados      : {len(estados_cache)}
         Municipios insertados   : {len(municipios_cache)}
         Errores                 : {errores}
