@@ -16,10 +16,9 @@ ENV PYTHONPATH="${PYTHONPATH}:/app"
 
 # 4. Documenta el puerto interno por defecto
 EXPOSE 8000
+ENV DATABASE_URL=${DATABASE_URL}
+ENV RENDER=${RENDER}
 
-# 5. Comando de arranque:
-#    - Carga los datos
-#    - Levanta el servidor en 0.0.0.0 y puerto ${PORT:-8000}
 CMD ["sh", "-c", "\
     python database/load_data.py && \
     uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} \
