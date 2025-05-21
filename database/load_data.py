@@ -4,29 +4,40 @@ import sys
 from sqlalchemy import create_engine, exc
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql import text
 from dotenv import load_dotenv
 
-# Configurar path para imports
+# Configurar path para imports relativos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models import Base, Estado, Municipio, Asentamiento
 
+# Leer variables de entorno
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+DEBUG_RESET_DB = os.getenv("DEBUG_RESET_DB", "false").lower() == "true"
+
+def crear_tablas(engine):
+    if DEBUG_RESET_DB:
+        print("⚠️ DEBUG: Eliminando todas las tablas...")
+        Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    print("🧱 Tablas listas.")
+
 def cargar_datos():
-    load_dotenv()
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    
+    if not DATABASE_URL:
+        raise RuntimeError("❌ La variable DATABASE_URL no está definida.")
+
     engine = create_engine(DATABASE_URL)
     Session = sessionmaker(bind=engine)
     db = Session()
 
     try:
-        # Limpiar tablas existentes (solo para desarrollo)
-        Base.metadata.drop_all(engine)
-        Base.metadata.create_all(engine)
+        crear_tablas(engine)
 
         estados_cache = set()
         municipios_cache = set()
+        asentamientos_buffer = []
+
         registros_procesados = 0
         errores = 0
 
@@ -36,23 +47,19 @@ def cargar_datos():
             f.seek(0)
             csv_reader = csv.DictReader(f, delimiter='|')
 
-            print(f"\n📊 Iniciando carga de {total} registros...")
+            print(f"\n📊 Iniciando carga de {total} registros...\n")
 
             for idx, row in enumerate(csv_reader, 1):
                 try:
-                    # Normalizar campos
                     estado_id = row['c_estado'].strip().zfill(2)
                     estado_nombre = row['d_estado'].strip().title()
                     municipio_id = row['c_mnpio'].strip().zfill(3)
                     municipio_nombre = row['D_mnpio'].strip().title()
                     cp = row['d_codigo'].strip().zfill(5)
-                    
-                    # Sanitizar campo d_zona
-                    d_zona = row['d_zona'].strip().title()
-                    if d_zona not in ['Urbano', 'Rural']:
-                        d_zona = 'Urbano'  # Valor por defecto para datos inconsistentes
+                    zona = row['d_zona'].strip().title()
+                    zona = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
 
-                    # Insertar Estado
+                    # Insertar Estado si es nuevo
                     estado_key = (estado_id, estado_nombre)
                     if estado_key not in estados_cache:
                         stmt = insert(Estado).values(
@@ -62,7 +69,7 @@ def cargar_datos():
                         db.execute(stmt)
                         estados_cache.add(estado_key)
 
-                    # Insertar Municipio
+                    # Insertar Municipio si es nuevo
                     municipio_key = (estado_id, municipio_id, municipio_nombre)
                     if municipio_key not in municipios_cache:
                         stmt = insert(Municipio).values(
@@ -73,49 +80,51 @@ def cargar_datos():
                         db.execute(stmt)
                         municipios_cache.add(municipio_key)
 
-                    # Insertar Asentamiento
-                    stmt = insert(Asentamiento).values(
-                        id_asenta_cpcons=row['id_asenta_cpcons'].strip().zfill(4),
-                        d_codigo=cp,
-                        d_asenta=row['d_asenta'].strip().title(),
-                        d_tipo_asenta=row['d_tipo_asenta'].strip(),
-                        d_zona=d_zona,
-                        c_mnpio=municipio_id,
-                        c_estado=estado_id
-                    ).on_conflict_do_nothing()
+                    # Crear objeto Asentamiento (para bulk insert)
+                    asentamientos_buffer.append(
+                        Asentamiento(
+                            id_asenta_cpcons=row['id_asenta_cpcons'].strip().zfill(4),
+                            d_codigo=cp,
+                            d_asenta=row['d_asenta'].strip().title(),
+                            d_tipo_asenta=row['d_tipo_asenta'].strip(),
+                            d_zona=zona,
+                            c_mnpio=municipio_id,
+                            c_estado=estado_id
+                        )
+                    )
 
-                    db.execute(stmt)
                     registros_procesados += 1
 
-                    # Commit parcial cada 500 registros
-                    if idx % 500 == 0:
-                        db.commit()
-                        print(f"⏳ Progreso: {idx}/{total} ({idx/total:.1%}) | Errores: {errores}")
-
-                except exc.IntegrityError as e:
-                    db.rollback()
-                    errores += 1
-                    print(f"❌ Error en registro {idx}: {str(e)}")
-                    continue
+                    if idx % 1000 == 0:
+                        print(f"⏳ Procesando {idx}/{total}...")
 
                 except Exception as e:
-                    db.rollback()
                     errores += 1
-                    print(f"❌ Error crítico en registro {idx}: {str(e)}")
+                    print(f"❌ Error en línea {idx}: {e}")
+                    db.rollback()
                     continue
 
+        # Insertar asentamientos en lote (eficiente)
+        try:
+            db.bulk_save_objects(asentamientos_buffer, return_defaults=False)
             db.commit()
-            print(f"""
-            ✅ Carga completada!
-            - Registros procesados: {registros_procesados}
-            - Errores: {errores}
-            - Estados: {len(estados_cache)}
-            - Municipios: {len(municipios_cache)}
-            """)
+        except Exception as e:
+            print(f"⚠️ Error en inserción bulk: {e}")
+            db.rollback()
+
+        print(f"""
+        ✅ Carga completada.
+        ----------------------------
+        Total registros leídos  : {total}
+        Registros insertados    : {registros_procesados}
+        Estados insertados      : {len(estados_cache)}
+        Municipios insertados   : {len(municipios_cache)}
+        Errores                 : {errores}
+        """)
 
     except Exception as e:
         db.rollback()
-        print(f"🔥 Error fatal: {str(e)}")
+        print(f"🔥 Error fatal: {e}")
         raise
     finally:
         db.close()
