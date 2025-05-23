@@ -21,7 +21,7 @@ class Asentamiento(Base):
     d_zona = Column(String(10), nullable=False)
     c_mnpio = Column(String(3), nullable=False)
     c_estado = Column(String(2), nullable=False)
-    
+
     __table_args__ = (
         ForeignKeyConstraint(
             ['c_mnpio', 'c_estado'],

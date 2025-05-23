@@ -15,7 +15,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models import Base, Estado, Municipio, Asentamiento
 
-# Leer variables de entorno
 DATABASE_URL = os.getenv("DATABASE_URL")
 DEBUG_RESET_DB = os.getenv("DEBUG_RESET_DB", "false").lower() == "true"
 
@@ -27,7 +26,6 @@ def crear_tablas(engine):
     print("🧱 Tablas listas.")
 
 def chunked(iterable, size):
-    """Yield successive chunks from iterable of length size."""
     for i in range(0, len(iterable), size):
         yield iterable[i : i + size]
 
@@ -67,7 +65,6 @@ def cargar_datos():
                     zona = row['d_zona'].strip().title()
                     zona = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
 
-                    # Insertar Estado si es nuevo
                     estado_key = (estado_id, estado_nombre)
                     if estado_key not in estados_cache:
                         stmt = insert(Estado).values(
@@ -77,7 +74,6 @@ def cargar_datos():
                         db.execute(stmt)
                         estados_cache.add(estado_key)
 
-                    # Insertar Municipio si es nuevo
                     municipio_key = (estado_id, municipio_id, municipio_nombre)
                     if municipio_key not in municipios_cache:
                         stmt = insert(Municipio).values(
@@ -88,7 +84,6 @@ def cargar_datos():
                         db.execute(stmt)
                         municipios_cache.add(municipio_key)
 
-                    # Preparar diccionario para upsert de Asentamiento
                     asentamientos_buffer.append({
                         "id_asenta_cpcons": row['id_asenta_cpcons'].strip().zfill(4),
                         "d_codigo": cp,
@@ -109,12 +104,9 @@ def cargar_datos():
                     db.rollback()
                     continue
 
-        # Upsert en lotes para evitar duplicados
         for batch in chunked(asentamientos_buffer, 1000):
             stmt = insert(Asentamiento).values(batch)
-            stmt = stmt.on_conflict_do_nothing(
-                index_elements=['id_asenta_cpcons', 'd_codigo']
-            )
+            stmt = stmt.on_conflict_do_nothing(index_elements=['id_asenta_cpcons', 'd_codigo'])
             db.execute(stmt)
         db.commit()
 
