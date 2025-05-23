@@ -103,6 +103,8 @@ def cargar_datos():
                     if idx % 1000 == 0:
                         print(f"⏳ Procesando {idx}/{total}...")
 
+                    print(row)
+
                 except Exception as e:
                     errores += 1
                     print(f"❌ Error en línea {idx}: {e}")
