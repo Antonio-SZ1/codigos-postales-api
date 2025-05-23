@@ -30,6 +30,22 @@ def chunked(iterable, size):
     for i in range(0, len(iterable), size):
         yield iterable[i : i + size]
 
+def safe_val(row, key, zfill=None, title=False):
+    """
+    Devuelve row[key].strip() (o '' si es None), opcionalmente zfilled 
+    y/o titulado.
+    """
+    v = row.get(key)
+    if v is None:
+        s = ''
+    else:
+        s = v.strip()
+    if title:
+        s = s.title()
+    if zfill and s.isdigit():
+        s = s.zfill(zfill)
+    return s
+
 def cargar_datos():
     if not DATABASE_URL:
         raise RuntimeError("❌ La variable DATABASE_URL no está definida.")
@@ -58,14 +74,19 @@ def cargar_datos():
 
             for idx, row in enumerate(reader, 1):
                 try:
-                    # Normalizar datos
-                    estado_id        = row['c_estado'].strip().zfill(2)
-                    estado_nombre    = row['d_estado'].strip().title()
-                    municipio_id     = row['c_mnpio'].strip().zfill(3)
-                    municipio_nombre = row['D_mnpio'].strip().title()
-                    cp               = row['d_codigo'].strip().zfill(5)
-                    zona             = row['d_zona'].strip().title()
+                    # Normalizar datos con safe_val
+                    estado_id        = safe_val(row, 'c_estado', zfill=2)
+                    estado_nombre    = safe_val(row, 'd_estado', title=True)
+                    municipio_id     = safe_val(row, 'c_mnpio', zfill=3)
+                    municipio_nombre = safe_val(row, 'd_mnpio', title=True)
+                    cp               = safe_val(row, 'd_codigo', zfill=5)
+                    zona             = safe_val(row, 'd_zona', title=True)
                     zona             = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
+                    asenta_id        = safe_val(row, 'id_asenta_cpcons', zfill=4)
+
+                    # Si no hay CP o ID de asentamiento, saltamos la fila
+                    if not cp or not asenta_id:
+                        raise ValueError(f"Falta campo crítico en línea {idx}")
 
                     # Insertar Estado (si no existe)
                     key_est = (estado_id, estado_nombre)
@@ -90,10 +111,10 @@ def cargar_datos():
 
                     # Añadir al buffer de Asentamientos
                     asentamientos_buffer.append({
-                        "id_asenta_cpcons": row['id_asenta_cpcons'].strip().zfill(4),
+                        "id_asenta_cpcons": asenta_id,
                         "d_codigo":         cp,
-                        "d_asenta":         row['d_asenta'].strip().title(),
-                        "d_tipo_asenta":    row['d_tipo_asenta'].strip(),
+                        "d_asenta":         safe_val(row, 'd_asenta', title=True),
+                        "d_tipo_asenta":    safe_val(row, 'd_tipo_asenta'),
                         "d_zona":           zona,
                         "c_mnpio":          municipio_id,
                         "c_estado":         estado_id
