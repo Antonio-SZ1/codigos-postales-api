@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey, ForeignKeyConstraint
+from sqlalchemy import Column, String, ForeignKey, ForeignKeyConstraint, Index
 from .database import Base
 
 class Estado(Base):
@@ -27,4 +27,5 @@ class Asentamiento(Base):
             ['c_mnpio', 'c_estado'],
             ['municipios.c_mnpio', 'municipios.c_estado']
         ),
+        Index('idx_asenta_unique', 'id_asenta_cpcons', 'd_codigo', unique=True)
     )
