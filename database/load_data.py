@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models import Base, Estado, Municipio, Asentamiento
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL   = os.getenv("DATABASE_URL")
 DEBUG_RESET_DB = os.getenv("DEBUG_RESET_DB", "false").lower() == "true"
 
 def crear_tablas(engine):
@@ -26,6 +26,7 @@ def crear_tablas(engine):
     print("🧱 Tablas listas.")
 
 def chunked(iterable, size):
+    """Yield successive chunks from iterable of length size."""
     for i in range(0, len(iterable), size):
         yield iterable[i : i + size]
 
@@ -33,70 +34,74 @@ def cargar_datos():
     if not DATABASE_URL:
         raise RuntimeError("❌ La variable DATABASE_URL no está definida.")
 
-    engine = create_engine(DATABASE_URL)
+    engine  = create_engine(DATABASE_URL)
     Session = sessionmaker(bind=engine)
-    db = Session()
+    db       = Session()
 
     try:
         crear_tablas(engine)
 
-        estados_cache = set()
-        municipios_cache = set()
+        estados_cache        = set()
+        municipios_cache     = set()
         asentamientos_buffer = []
 
         registros_procesados = 0
-        errores = 0
+        errores              = 0
 
         with open('data/codigos_postales.csv', 'r', encoding='utf-8-sig') as f:
-            csv_reader = csv.DictReader(f, delimiter='|')
-            total = sum(1 for _ in csv_reader)
+            reader = csv.DictReader(f, delimiter='|')
+            total  = sum(1 for _ in reader)
             f.seek(0)
-            csv_reader = csv.DictReader(f, delimiter='|')
+            reader = csv.DictReader(f, delimiter='|')
 
             print(f"\n📊 Iniciando carga de {total} registros...\n")
 
-            for idx, row in enumerate(csv_reader, 1):
+            for idx, row in enumerate(reader, 1):
                 try:
-                    estado_id = row['c_estado'].strip().zfill(2)
-                    estado_nombre = row['d_estado'].strip().title()
-                    municipio_id = row['c_mnpio'].strip().zfill(3)
-                    municipio_nombre = row['D_mnpio'].strip().title()
-                    cp = row['d_codigo'].strip().zfill(5)
-                    zona = row['d_zona'].strip().title()
-                    zona = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
+                    # Normalizar datos
+                    estado_id       = row['c_estado'].strip().zfill(2)
+                    estado_nombre   = row['d_estado'].strip().title()
+                    municipio_id    = row['c_mnpio'].strip().zfill(3)
+                    municipio_nombre= row['d_mnpio'].strip().title()
+                    cp              = row['d_codigo'].strip().zfill(5)
+                    zona            = row['d_zona'].strip().title()
+                    zona            = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
 
-                    estado_key = (estado_id, estado_nombre)
-                    if estado_key not in estados_cache:
+                    # Insertar Estado
+                    key_est = (estado_id, estado_nombre)
+                    if key_est not in estados_cache:
                         stmt = insert(Estado).values(
                             c_estado=estado_id,
                             nombre=estado_nombre
                         ).on_conflict_do_nothing()
                         db.execute(stmt)
-                        estados_cache.add(estado_key)
+                        estados_cache.add(key_est)
 
-                    municipio_key = (estado_id, municipio_id, municipio_nombre)
-                    if municipio_key not in municipios_cache:
+                    # Insertar Municipio
+                    key_mun = (estado_id, municipio_id, municipio_nombre)
+                    if key_mun not in municipios_cache:
                         stmt = insert(Municipio).values(
                             c_mnpio=municipio_id,
                             c_estado=estado_id,
                             nombre=municipio_nombre
                         ).on_conflict_do_nothing()
                         db.execute(stmt)
-                        municipios_cache.add(municipio_key)
+                        municipios_cache.add(key_mun)
 
+                    # Buffer de Asentamientos
                     asentamientos_buffer.append({
                         "id_asenta_cpcons": row['id_asenta_cpcons'].strip().zfill(4),
-                        "d_codigo": cp,
-                        "d_asenta": row['d_asenta'].strip().title(),
-                        "d_tipo_asenta": row['d_tipo_asenta'].strip(),
-                        "d_zona": zona,
-                        "c_mnpio": municipio_id,
-                        "c_estado": estado_id
+                        "d_codigo":         cp,
+                        "d_asenta":         row['d_asenta'].strip().title(),
+                        "d_tipo_asenta":    row['d_tipo_asenta'].strip(),
+                        "d_zona":           zona,
+                        "c_mnpio":          municipio_id,
+                        "c_estado":         estado_id
                     })
 
                     registros_procesados += 1
                     if idx % 1000 == 0:
-                        print(f"⏳ Procesando {idx}/{total}...")
+                        print(f"⏳ Procesados {idx}/{total}…")
 
                 except Exception as e:
                     errores += 1
@@ -104,21 +109,24 @@ def cargar_datos():
                     db.rollback()
                     continue
 
+        # Upsert en lotes con clave compuesta como PK
         for batch in chunked(asentamientos_buffer, 1000):
             stmt = insert(Asentamiento).values(batch)
-            stmt = stmt.on_conflict_do_nothing(index_elements=['id_asenta_cpcons', 'd_codigo'])
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=['id_asenta_cpcons', 'd_codigo']
+            )
             db.execute(stmt)
         db.commit()
 
         print(f"""
-        ✅ Carga completada.
-        ----------------------------
-        Total registros leídos  : {total}
-        Registros procesados    : {registros_procesados}
-        Estados insertados      : {len(estados_cache)}
-        Municipios insertados   : {len(municipios_cache)}
-        Errores                 : {errores}
-        """)
+✅ Carga completada.
+----------------------------
+Total registros leídos  : {total}
+Registros procesados    : {registros_procesados}
+Estados insertados      : {len(estados_cache)}
+Municipios insertados   : {len(municipios_cache)}
+Errores                 : {errores}
+""")
 
     except Exception as e:
         db.rollback()
