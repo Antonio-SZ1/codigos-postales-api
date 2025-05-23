@@ -62,7 +62,7 @@ def cargar_datos():
                     estado_id = row['c_estado'].strip().zfill(2)
                     estado_nombre = row['d_estado'].strip().title()
                     municipio_id = row['c_mnpio'].strip().zfill(3)
-                    municipio_nombre = row['D_mnpio'].strip().title()
+                    municipio_nombre = row['d_mnpio'].strip().title()
                     cp = row['d_codigo'].strip().zfill(5)
                     zona = row['d_zona'].strip().title()
                     zona = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
@@ -103,8 +103,6 @@ def cargar_datos():
                     if idx % 1000 == 0:
                         print(f"⏳ Procesando {idx}/{total}...")
 
-                    print(row)
-
                 except Exception as e:
                     errores += 1
                     print(f"❌ Error en línea {idx}: {e}")
@@ -114,7 +112,9 @@ def cargar_datos():
         # Upsert en lotes para evitar duplicados
         for batch in chunked(asentamientos_buffer, 1000):
             stmt = insert(Asentamiento).values(batch)
-            stmt = stmt.on_conflict_do_nothing(index_elements=['id_asenta_cpcons'])
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=['id_asenta_cpcons', 'd_codigo']
+            )
             db.execute(stmt)
         db.commit()
 
