@@ -5,12 +5,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
-# Solo cargar dotenv si no estamos en producción (Render)
+
 if os.getenv("RENDER") != "true":
     from dotenv import load_dotenv
     load_dotenv()
 
-# Para imports relativos
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models import Base, Estado, Municipio, Asentamiento
@@ -74,7 +74,7 @@ def cargar_datos():
 
             for idx, row in enumerate(reader, 1):
                 try:
-                    # Normalizar datos con safe_val
+               
                     estado_id        = safe_val(row, 'c_estado', zfill=2)
                     estado_nombre    = safe_val(row, 'd_estado', title=True)
                     municipio_id     = safe_val(row, 'c_mnpio', zfill=3)
@@ -84,11 +84,11 @@ def cargar_datos():
                     zona             = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
                     asenta_id        = safe_val(row, 'id_asenta_cpcons', zfill=4)
 
-                    # Si no hay CP o ID de asentamiento, saltamos la fila
+                  
                     if not cp or not asenta_id:
                         raise ValueError(f"Falta campo crítico en línea {idx}")
 
-                    # Insertar Estado (si no existe)
+                
                     key_est = (estado_id, estado_nombre)
                     if key_est not in estados_cache:
                         stmt = insert(Estado).values(
@@ -98,7 +98,7 @@ def cargar_datos():
                         db.execute(stmt)
                         estados_cache.add(key_est)
 
-                    # Insertar Municipio (si no existe)
+                 
                     key_mun = (estado_id, municipio_id, municipio_nombre)
                     if key_mun not in municipios_cache:
                         stmt = insert(Municipio).values(
@@ -109,7 +109,7 @@ def cargar_datos():
                         db.execute(stmt)
                         municipios_cache.add(key_mun)
 
-                    # Añadir al buffer de Asentamientos
+              
                     asentamientos_buffer.append({
                         "id_asenta_cpcons": asenta_id,
                         "d_codigo":         cp,
@@ -130,7 +130,7 @@ def cargar_datos():
                     db.rollback()
                     continue
 
-        # Bulk upsert con clave primaria compuesta (id_asenta_cpcons, d_codigo)
+      
         for batch in chunked(asentamientos_buffer, 1000):
             stmt = insert(Asentamiento).values(batch)
             stmt = stmt.on_conflict_do_nothing(

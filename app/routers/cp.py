@@ -5,7 +5,7 @@ from ..models import Asentamiento, Municipio, Estado
 
 router = APIRouter(prefix="/api", tags=["Códigos Postales"])
 
-# Dependencia para la sesión de base de datos
+
 def get_db():
     db = SessionLocal()
     try:
