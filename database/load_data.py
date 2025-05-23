@@ -26,7 +26,7 @@ def crear_tablas(engine):
     print("🧱 Tablas listas.")
 
 def chunked(iterable, size):
-    """Yield successive chunks from iterable of length size."""
+    """Divide una lista en trozos de tamaño `size`."""
     for i in range(0, len(iterable), size):
         yield iterable[i : i + size]
 
@@ -59,15 +59,15 @@ def cargar_datos():
             for idx, row in enumerate(reader, 1):
                 try:
                     # Normalizar datos
-                    estado_id       = row['c_estado'].strip().zfill(2)
-                    estado_nombre   = row['d_estado'].strip().title()
-                    municipio_id    = row['c_mnpio'].strip().zfill(3)
-                    municipio_nombre= row['d_mnpio'].strip().title()
-                    cp              = row['d_codigo'].strip().zfill(5)
-                    zona            = row['d_zona'].strip().title()
-                    zona            = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
+                    estado_id        = row['c_estado'].strip().zfill(2)
+                    estado_nombre    = row['d_estado'].strip().title()
+                    municipio_id     = row['c_mnpio'].strip().zfill(3)
+                    municipio_nombre = row['d_mnpio'].strip().title()
+                    cp               = row['d_codigo'].strip().zfill(5)
+                    zona             = row['d_zona'].strip().title()
+                    zona             = zona if zona in ['Urbano', 'Rural'] else 'Urbano'
 
-                    # Insertar Estado
+                    # Insertar Estado (si no existe)
                     key_est = (estado_id, estado_nombre)
                     if key_est not in estados_cache:
                         stmt = insert(Estado).values(
@@ -77,7 +77,7 @@ def cargar_datos():
                         db.execute(stmt)
                         estados_cache.add(key_est)
 
-                    # Insertar Municipio
+                    # Insertar Municipio (si no existe)
                     key_mun = (estado_id, municipio_id, municipio_nombre)
                     if key_mun not in municipios_cache:
                         stmt = insert(Municipio).values(
@@ -88,7 +88,7 @@ def cargar_datos():
                         db.execute(stmt)
                         municipios_cache.add(key_mun)
 
-                    # Buffer de Asentamientos
+                    # Añadir al buffer de Asentamientos
                     asentamientos_buffer.append({
                         "id_asenta_cpcons": row['id_asenta_cpcons'].strip().zfill(4),
                         "d_codigo":         cp,
@@ -109,7 +109,7 @@ def cargar_datos():
                     db.rollback()
                     continue
 
-        # Upsert en lotes con clave compuesta como PK
+        # Bulk upsert con clave primaria compuesta (id_asenta_cpcons, d_codigo)
         for batch in chunked(asentamientos_buffer, 1000):
             stmt = insert(Asentamiento).values(batch)
             stmt = stmt.on_conflict_do_nothing(

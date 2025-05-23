@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKeyConstraint
+from sqlalchemy import Column, String, ForeignKey, ForeignKeyConstraint
 from .database import Base
 
 class Estado(Base):
@@ -9,25 +9,24 @@ class Estado(Base):
 class Municipio(Base):
     __tablename__ = "municipios"
     c_mnpio = Column(String(3), primary_key=True)
-    c_estado = Column(String(2), ForeignKeyConstraint(
-        ['c_estado'], ['estados.c_estado']
-    ), primary_key=True)
-    nombre  = Column(String(100), nullable=False)
+    # c_estado como FK en columna, no ForeignKeyConstraint aquí
+    c_estado = Column(String(2), ForeignKey('estados.c_estado'), primary_key=True)
+    nombre   = Column(String(100), nullable=False)
 
 class Asentamiento(Base):
     __tablename__ = "asentamientos"
-   
+    # Clave primaria compuesta
     id_asenta_cpcons = Column(String(4), primary_key=True)
     d_codigo         = Column(String(5), primary_key=True)
 
-    d_asenta         = Column(String(150), nullable=False)
-    d_tipo_asenta    = Column(String(50),  nullable=False)
-    d_zona           = Column(String(10),  nullable=False)
-    c_mnpio          = Column(String(3),   nullable=False)
-    c_estado         = Column(String(2),   nullable=False)
+    d_asenta      = Column(String(150), nullable=False)
+    d_tipo_asenta = Column(String(50),  nullable=False)
+    d_zona        = Column(String(10),  nullable=False)
+    c_mnpio       = Column(String(3),   nullable=False)
+    c_estado      = Column(String(2),   nullable=False)
 
     __table_args__ = (
-       
+        # FK compuesta hacia municipios (c_mnpio, c_estado)
         ForeignKeyConstraint(
             ['c_mnpio', 'c_estado'],
             ['municipios.c_mnpio', 'municipios.c_estado']
