@@ -77,7 +77,7 @@ docker-compose up --build
 # 4. Acceder a los componentes
 API Docs: http://localhost:8000/docs
 Frontend: http://localhost:8000/static/index.html
-PostgreSQL: jdbc:postgresql://localhost:5432/codigos_postales
+
 
 
 
