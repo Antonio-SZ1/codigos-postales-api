@@ -27,6 +27,11 @@ API REST para consulta de códigos postales mexicanos con base de datos normaliz
 
 ## Instalación y Uso ⚙️
 
+### Pagina en linea y documentacion (Sin necesidad de instalacion)
+https://codigos-postales-api-wcjv.vercel.app/
+
+https://codigos-postales-api.onrender.com/docs
+
 ### Requisitos Previos
 - Docker y Docker Compose
 - Git (opcional)
@@ -37,10 +42,42 @@ API REST para consulta de códigos postales mexicanos con base de datos normaliz
 git clone git@github.com:Antonio-SZ1/codigos-postales-api.git
 cd codigos-postales-api
 
-# 2. Iniciar servicios
+# 2. Crear base de dartos de manera local utilizando postgreSQL
+
+CREATE TABLE estados (
+    c_estado CHAR(2) PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL UNIQUE
+);
+
+
+CREATE TABLE municipios (
+    c_mnpio CHAR(3),
+    c_estado CHAR(2),
+    nombre VARCHAR(100) NOT NULL,
+    PRIMARY KEY (c_mnpio, c_estado),
+    FOREIGN KEY (c_estado) REFERENCES estados(c_estado)
+);
+
+CREATE TABLE asentamientos (
+    id_asenta_cpcons CHAR(4),
+    d_codigo CHAR(5),
+    d_asenta VARCHAR(150) NOT NULL,
+    d_tipo_asenta VARCHAR(50) NOT NULL,
+    d_zona VARCHAR(10) NOT NULL,
+    c_mnpio CHAR(3) NOT NULL,
+    c_estado CHAR(2) NOT NULL,
+    PRIMARY KEY (id_asenta_cpcons, d_codigo),
+    FOREIGN KEY (c_mnpio, c_estado)
+        REFERENCES municipios(c_mnpio, c_estado)
+);
+
+# 3. Iniciar servicios
 docker-compose up --build
 
-# 3. Acceder a los componentes
+# 4. Acceder a los componentes
 API Docs: http://localhost:8000/docs
 Frontend: http://localhost:8000/static/index.html
 PostgreSQL: jdbc:postgresql://localhost:5432/codigos_postales
+
+
+
